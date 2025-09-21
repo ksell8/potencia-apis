@@ -1,0 +1,223 @@
+openapi: 3.0.1
+info:
+  title: Airtable API Gateway
+  description: API Gateway for Airtable operations with custom authorization
+  version: 1.0.0
+components:
+  securitySchemes:
+    CustomAuthorizer:
+      type: apiKey
+      in: header
+      name: Authorization
+      x-amazon-apigateway-authtype: custom
+      x-amazon-apigateway-authorizer:
+        type: token
+        authorizerUri: ${authorizer_uri}
+        authorizerCredentials: ${authorizer_credentials}
+        identitySource: method.request.header.Authorization
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+    AirtableRecord:
+      type: object
+      properties:
+        fields:
+          type: object
+          additionalProperties: true
+          description: The fields of the Airtable record
+      required:
+        - fields
+    AirtableResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        fields:
+          type: object
+          additionalProperties: true
+        createdTime:
+          type: string
+          format: date-time
+security:
+  - CustomAuthorizer: []
+paths:
+  /airtable/{tableName}:
+    get:
+      summary: Method not allowed
+      description: GET method is not supported for this endpoint
+      parameters:
+        - name: tableName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The name of the Airtable table
+      responses:
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: '{"statusCode": 405}'
+        responses:
+          default:
+            statusCode: "405"
+            responseTemplates:
+              application/json: '{"message": "Method not allowed. Only POST requests are supported.", "code": "METHOD_NOT_ALLOWED"}'
+    put:
+      summary: Method not allowed
+      description: PUT method is not supported for this endpoint
+      parameters:
+        - name: tableName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The name of the Airtable table
+      responses:
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: '{"statusCode": 405}'
+        responses:
+          default:
+            statusCode: "405"
+            responseTemplates:
+              application/json: '{"message": "Method not allowed. Only POST requests are supported.", "code": "METHOD_NOT_ALLOWED"}'
+    delete:
+      summary: Method not allowed
+      description: DELETE method is not supported for this endpoint
+      parameters:
+        - name: tableName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The name of the Airtable table
+      responses:
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: '{"statusCode": 405}'
+        responses:
+          default:
+            statusCode: "405"
+            responseTemplates:
+              application/json: '{"message": "Method not allowed. Only POST requests are supported.", "code": "METHOD_NOT_ALLOWED"}'
+    patch:
+      summary: Method not allowed
+      description: PATCH method is not supported for this endpoint
+      parameters:
+        - name: tableName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The name of the Airtable table
+      responses:
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: '{"statusCode": 405}'
+        responses:
+          default:
+            statusCode: "405"
+            responseTemplates:
+              application/json: '{"message": "Method not allowed. Only POST requests are supported.", "code": "METHOD_NOT_ALLOWED"}'
+    post:
+      summary: Create a record in the specified Airtable table
+      description: Creates a new record in the specified Airtable table
+      parameters:
+        - name: tableName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The name of the Airtable table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AirtableRecord'
+      responses:
+        '200':
+          description: Record created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtableResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${lambda_uri}
+        passthroughBehavior: when_no_match

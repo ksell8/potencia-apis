@@ -1,0 +1,35 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Lambda main libraries (exclude all folders except tests)
+lambda-main/*/
+!lambda-main/tests/
+
+# Keep files in lambda-main root
+!lambda-main/*.py
+!lambda-main/requirements.txt
+
+# Deployment artifacts
+*.zip
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
