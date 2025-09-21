@@ -1,0 +1,23 @@
+[MESSAGES CONTROL]
+disable=
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring
+    R0903,  # too-few-public-methods
+    W0613,  # unused-argument
+    C0103,  # invalid-name
+    E0401,  # import-error
+    W0611,  # unused-import (for test files)
+
+[FORMAT]
+max-line-length=88
+
+[BASIC]
+good-names=i,j,k,ex,Run,_
+
+[DESIGN]
+max-args=7
+max-locals=15
+max-returns=6
+max-branches=12
+max-statements=50

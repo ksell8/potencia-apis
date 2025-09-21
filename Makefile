@@ -1,5 +1,5 @@
 clean:
-	rm -f main.zip authorizer.zip 
+	rm -f main.zip authorizer.zip
 
 authorizer:
 	cd lambda-authorizer && zip -r ../authorizer.zip .

@@ -5,7 +5,7 @@ terraform {
       version = "~> 5.0"
     }
   }
-  
+
   backend "s3" {
     bucket  = "potencia-terraform-state-427382454328"
     key     = "airtable-apis/terraform.tfstate"

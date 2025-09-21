@@ -34,11 +34,11 @@ class Match(BaseModel):
         # Convert single strings to lists for learner and tutor
         learner_list = [input_data.learner]
         tutor_list = [input_data.tutor]
-        
+
         # Calculate overlapping time slots
-        overlapping_slots = list(set(input_data.learner_available_time_slots) & 
+        overlapping_slots = list(set(input_data.learner_available_time_slots) &
                                 set(input_data.tutor_available_time_slots))
-        
+
         return cls(**{
             "Approval Status": input_data.approval_status,
             "Learner": learner_list,

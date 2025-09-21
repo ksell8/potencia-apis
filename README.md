@@ -11,7 +11,7 @@ This middleware serves as a bridge between Softr webhooks and Airtable, providin
 This creates a problem when working with Airtable, which often requires:
 
 - Complex data structures
-- Record relationships (arrays/lists)  
+- Record relationships (arrays/lists)
 - Computed fields based on input data
 - Custom business logic before record creation
 
@@ -37,7 +37,7 @@ For the `Matches` table, this middleware:
 ```json
 {
   "Learner": "recJpeIQuMnAlfJ1R",
-  "Tutor": "recuUhUFHYIQ6B3De", 
+  "Tutor": "recuUhUFHYIQ6B3De",
   "Learner Available Time Slots": ["rec1", "rec2", "rec3"],
   "Tutor Available Time Slots": ["rec2", "rec4", "rec5"],
   "Approval Status": "Requested"
