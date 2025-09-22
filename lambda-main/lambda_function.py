@@ -3,6 +3,8 @@ import boto3
 import os
 import requests
 from typing import Dict, Any, Optional
+from pydantic import ValidationError
+from models import Match, MatchInput
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -71,7 +73,12 @@ def handle_post_request(table_name: str, body: str, token: str, base_id: str) ->
             return create_error_response(400, "Invalid JSON in request body")
 
         # Convert flattened Softr format to Airtable format
-        airtable_data = convert_softr_to_airtable(data)
+        try:
+            airtable_data = convert_softr_to_airtable(data, table_name)
+        except ValueError as e:
+            # Handle validation errors with 400 Bad Request
+            print(f"Validation error: {str(e)}")
+            return create_error_response(400, str(e))
 
         # Prepare Airtable API request
         url = f"https://api.airtable.com/v0/{base_id}/{table_name}"
@@ -98,9 +105,12 @@ def handle_post_request(table_name: str, body: str, token: str, base_id: str) ->
         print(f"Error in POST request: {str(e)}")
         return create_error_response(500, f"Error creating record: {str(e)}")
 
-def convert_softr_to_airtable(softr_data: Dict[str, Any]) -> Dict[str, Any]:
+def convert_softr_to_airtable(softr_data: Dict[str, Any], table_name: str) -> Dict[str, Any]:
     """
     Convert flattened Softr webhook data to Airtable API format.
+
+    For matches table, uses Match model for data transformation.
+    For other tables, uses direct field mapping.
 
     Input (Softr format):
     {
@@ -122,13 +132,39 @@ def convert_softr_to_airtable(softr_data: Dict[str, Any]) -> Dict[str, Any]:
         ]
     }
     """
-    return {
-        "records": [
-            {
-                "fields": softr_data
+    if table_name.lower() == "matches":
+        try:
+            # Use Match model for matches table
+            match_input = MatchInput(**softr_data)
+            match = Match.from_input(match_input)
+            return {
+                "records": [
+                    {
+                        "fields": match.model_dump(by_alias=True)
+                    }
+                ]
             }
-        ]
-    }
+        except ValidationError as e:
+            # Re-raise with a more specific error message for matches table
+            missing_fields = []
+            for error in e.errors():
+                if error['type'] == 'missing':
+                    field_name = error['loc'][0] if error['loc'] else 'unknown'
+                    missing_fields.append(field_name)
+
+            if missing_fields:
+                raise ValueError(f"Missing required fields for matches table: {', '.join(missing_fields)}")
+            else:
+                raise ValueError(f"Validation error for matches table: {str(e)}")
+    else:
+        # Default behavior for other tables
+        return {
+            "records": [
+                {
+                    "fields": softr_data
+                }
+            ]
+        }
 
 def create_error_response(status_code: int, message: str) -> Dict[str, Any]:
     """Create a standardized error response."""

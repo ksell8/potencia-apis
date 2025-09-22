@@ -219,8 +219,8 @@ resource "aws_api_gateway_deployment" "main" {
 }
 
 # API Gateway stage
-resource "aws_api_gateway_stage" "prod" {
+resource "aws_api_gateway_stage" "potencia" {
   deployment_id = aws_api_gateway_deployment.main.id
   rest_api_id   = aws_api_gateway_rest_api.main.id
-  stage_name    = "prod"
+  stage_name    = "potencia"
 }

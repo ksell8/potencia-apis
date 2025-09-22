@@ -1,6 +1,6 @@
 output "api_gateway_url" {
   description = "URL of the API Gateway"
-  value       = "${aws_api_gateway_stage.prod.invoke_url}"
+  value       = "${aws_api_gateway_stage.potencia.invoke_url}"
 }
 
 output "api_gateway_id" {
