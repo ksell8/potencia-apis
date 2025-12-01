@@ -2,50 +2,80 @@ import json
 import boto3
 import os
 import requests
+import logging
 from typing import Dict, Any, Optional
 from pydantic import ValidationError
 from models import Match, MatchInput
+from datetime import datetime, timezone
+
+# Initialize logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Initialize AWS clients
+dynamodb = boto3.resource('dynamodb')
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Main Lambda function that handles Airtable API operations.
-    Processes requests to add record to /airtable/{tableName}.
+    Main Lambda function that processes SQS messages for Airtable API operations.
+    Updates DynamoDB status and calls Airtable API.
     """
 
     try:
-        # Parse the incoming request
-        http_method = event.get('httpMethod', '')
-        path = event.get('path', '')
-        path_parameters = event.get('pathParameters', {}) or {}
-        body = event.get('body', '')
-        headers = event.get('headers', {})
+        # Process SQS records
+        records = event.get('Records', [])
 
-        # Extract table name from path parameters
-        table_name = path_parameters.get('tableName', '')
+        for record in records:
+            # Parse SQS message
+            message_body = json.loads(record['body'])
+            message_attributes = record.get('messageAttributes', {})
 
-        if not table_name:
-            return create_error_response(400, "Table name is required")
+            # Extract data from message
+            table_name = message_attributes.get('TableName', {}).get('stringValue', '')
+            match_combo_id = message_attributes.get('MatchComboId', {}).get('stringValue', '')
 
-        # Get Airtable credentials from Secrets Manager
-        airtable_config = get_airtable_config()
-        if not airtable_config:
-            return create_error_response(500, "Failed to retrieve Airtable configuration")
+            if not table_name or not match_combo_id:
+                logger.error(f"Missing required message attributes: table_name={table_name}, match_combo_id={match_combo_id}")
+                continue
 
-        airtable_token = airtable_config.get('token', '')
-        base_id = airtable_config.get('base_id', '')
+            # Update DynamoDB status to PROCESSING
+            try:
+                update_dynamodb_status(match_combo_id, 'PROCESSING')
+            except Exception as e:
+                logger.error(f"Error updating DynamoDB status to PROCESSING: {str(e)}")
+                continue
 
-        if not airtable_token or not base_id:
-            return create_error_response(500, "Missing Airtable token or base_id in configuration")
+            # Get Airtable credentials from Secrets Manager
+            airtable_config = get_airtable_config()
+            if not airtable_config:
+                update_dynamodb_status(match_combo_id, 'FAILED', 'Failed to retrieve Airtable configuration')
+                continue
 
-        # Handle different HTTP methods
-        if http_method == 'POST':
-            return handle_post_request(table_name, body, airtable_token, base_id)
-        else:
-            return create_error_response(405, f"Method {http_method} not allowed")
+            airtable_token = airtable_config.get('token', '')
+            base_id = airtable_config.get('base_id', '')
+
+            if not airtable_token or not base_id:
+                update_dynamodb_status(match_combo_id, 'FAILED', 'Missing Airtable token or base_id')
+                continue
+
+            # Process the message and call Airtable API
+            try:
+                result = process_airtable_request(table_name, message_body, airtable_token, base_id)
+                if result['success']:
+                    update_dynamodb_status(match_combo_id, 'COMPLETED')
+                    logger.info(f"Successfully processed match {match_combo_id}")
+                else:
+                    update_dynamodb_status(match_combo_id, 'FAILED', result['error'])
+                    logger.error(f"Failed to process match {match_combo_id}: {result['error']}")
+            except Exception as e:
+                update_dynamodb_status(match_combo_id, 'FAILED', str(e))
+                logger.error(f"Error processing match {match_combo_id}: {str(e)}")
+
+        return {'statusCode': 200, 'body': 'Processing completed'}
 
     except Exception as e:
-        print(f"Error processing request: {str(e)}")
-        return create_error_response(500, f"Internal server error: {str(e)}")
+        logger.error(f"Error processing SQS event: {str(e)}")
+        return {'statusCode': 500, 'body': f"Error: {str(e)}"}
 
 def get_airtable_config() -> Optional[Dict[str, str]]:
     """Get Airtable configuration from Secrets Manager."""
@@ -57,28 +87,43 @@ def get_airtable_config() -> Optional[Dict[str, str]]:
         return json.loads(response['SecretString'])
 
     except Exception as e:
-        print(f"Error retrieving Airtable config: {str(e)}")
+        logger.error(f"Error retrieving Airtable config: {str(e)}")
         return None
 
-def handle_post_request(table_name: str, body: str, token: str, base_id: str) -> Dict[str, Any]:
-    """Handle POST request to create a new record."""
+def update_dynamodb_status(match_combo_id: str, status: str, error_message: str = None) -> None:
+    """Update DynamoDB record status."""
     try:
-        if not body:
-            return create_error_response(400, "Request body is required")
+        table = dynamodb.Table('matches-queue')
 
-        # Parse the request body
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            return create_error_response(400, "Invalid JSON in request body")
+        update_expression = 'SET #status = :status'
+        expression_attribute_names = {'#status': 'Status'}
+        expression_attribute_values = {':status': status}
 
-        # Convert flattened Softr format to Airtable format
+        if error_message:
+            update_expression += ', ErrorMessage = :error'
+            expression_attribute_values[':error'] = error_message
+
+        table.update_item(
+            Key={
+                'MatchComboId': match_combo_id
+            },
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+
+    except Exception as e:
+        logger.error(f"Error updating DynamoDB status: {str(e)}")
+        raise e
+
+def process_airtable_request(table_name: str, message_body: Dict[str, Any], token: str, base_id: str) -> Dict[str, Any]:
+    """Process message body and make Airtable API request."""
+    try:
+        # Convert flattened format to Airtable format
         try:
-            airtable_data = convert_softr_to_airtable(data, table_name)
+            airtable_data = convert_softr_to_airtable(message_body, table_name)
         except ValueError as e:
-            # Handle validation errors with 400 Bad Request
-            print(f"Validation error: {str(e)}")
-            return create_error_response(400, str(e))
+            return {'success': False, 'error': f"Validation error: {str(e)}"}
 
         # Prepare Airtable API request
         url = f"https://api.airtable.com/v0/{base_id}/{table_name}"
@@ -91,19 +136,12 @@ def handle_post_request(table_name: str, body: str, token: str, base_id: str) ->
         response = requests.post(url, headers=headers, json=airtable_data)
 
         if response.status_code == 200:
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'application/json'
-                },
-                'body': response.text
-            }
+            return {'success': True, 'response': response.json()}
         else:
-            return create_error_response(response.status_code, f"Airtable API error: {response.text}")
+            return {'success': False, 'error': f"Airtable API error: {response.text}"}
 
     except Exception as e:
-        print(f"Error in POST request: {str(e)}")
-        return create_error_response(500, f"Error creating record: {str(e)}")
+        return {'success': False, 'error': f"Error processing request: {str(e)}"}
 
 def convert_softr_to_airtable(softr_data: Dict[str, Any], table_name: str) -> Dict[str, Any]:
     """
@@ -153,8 +191,10 @@ def convert_softr_to_airtable(softr_data: Dict[str, Any], table_name: str) -> Di
                     missing_fields.append(field_name)
 
             if missing_fields:
+                logger.error(f"Missing required fields for matches table: {', '.join(missing_fields)}")
                 raise ValueError(f"Missing required fields for matches table: {', '.join(missing_fields)}")
             else:
+                logger.error(f"Validation error for matches table: {str(e)}")
                 raise ValueError(f"Validation error for matches table: {str(e)}")
     else:
         # Default behavior for other tables
@@ -165,16 +205,3 @@ def convert_softr_to_airtable(softr_data: Dict[str, Any], table_name: str) -> Di
                 }
             ]
         }
-
-def create_error_response(status_code: int, message: str) -> Dict[str, Any]:
-    """Create a standardized error response."""
-    return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json'
-        },
-        'body': json.dumps({
-            'error': message,
-            'code': status_code
-        })
-    }

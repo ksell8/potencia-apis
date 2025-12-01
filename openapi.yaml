@@ -13,7 +13,6 @@ components:
       x-amazon-apigateway-authorizer:
         type: token
         authorizerUri: ${authorizer_uri}
-        authorizerCredentials: ${authorizer_credentials}
         identitySource: method.request.header.Authorization
   schemas:
     Error:

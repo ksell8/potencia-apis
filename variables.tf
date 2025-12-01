@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "api_name" {
   description = "Name of the API Gateway"
   type        = string
-  default     = "custom-api"
+  default     = "potencia-api"
 }
 
 variable "api_key_secret_name" {
