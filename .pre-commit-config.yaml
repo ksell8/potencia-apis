@@ -23,3 +23,8 @@ repos:
         exclude: ^(venv|lambda-main/(?!lambda_function|models|tests)).*
       - id: check-yaml
       - id: check-added-large-files
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.104.0
+    hooks:
+      - id: terraform_fmt

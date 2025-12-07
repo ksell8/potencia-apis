@@ -17,9 +17,10 @@ This creates a problem when working with Airtable, which often requires:
 
 ## Solution
 
-This AWS Lambda-based middleware:
+This AWS Lambda-SQS middleware:
 
 1. **Receives flattened data** from Softr webhooks
+2. **Determines if request is valid** based on buisness logic and if so queues it for publish
 2. **Applies custom transformations** using Pydantic models
 3. **Formats data appropriately** for Airtable's API requirements
 4. **Sends structured data** to Airtable
@@ -62,46 +63,18 @@ For the `Matches` table, this middleware:
 
 - **API Gateway**: REST API with OpenAPI specification
 - **Lambda Authorizer**: Validates API tokens from Secrets Manager (`/api/token`)
+- **Verifier Lambda**: Verifies that the match request is valid and then forwards it to the SQS.
+- **Match SQS**: Match requests queue (deduplication and strong consistency provided with DynamoDB)
+- **Lambda Event Source**: Waits for messages in SQS queue and then sends to main lambda worker.
 - **Main Lambda**: Handles Airtable operations using credentials from Secrets Manager (`/api/token/airtable`)
+
+## Rationale for this Architecture
+
+We are working towards a matching workflow which will calculate all of the tutors who could possibly be matched against a user and sends the request.  Making this request have an synchronous kick off and an asynchronous fulfillment is a step in this direction.
 
 ## Endpoints
 
 - `POST /airtable/{tableName}` - Create records in specified table
-
-## Setup
-
-### 1. Create Secrets in AWS Secrets Manager
-
-Create two secrets manually:
-
-**Authorization Secret** (`/api/token`):
-```json
-{
-  "api_key": "your-secure-api-key-here"
-}
-```
-
-**Airtable Secret** (`/api/token/airtable`):
-```json
-{
-  "token": "your-airtable-personal-access-token",
-  "base_id": "your-airtable-base-id"
-}
-```
-
-### 2. Build Lambda Functions
-
-```bash
-./build.sh
-```
-
-### 3. Deploy with Terraform
-
-```bash
-terraform init
-terraform plan
-terraform apply
-```
 
 ## Usage
 
@@ -125,14 +98,3 @@ curl -X POST https://your-api-gateway-url/prod/airtable/customers \
     }
   }'
 ```
-
-## Files
-
-- `providers.tf` - AWS provider configuration
-- `variables.tf` - Terraform variables
-- `main.tf` - Main infrastructure resources
-- `outputs.tf` - Output values
-- `openapi.yaml` - API specification
-- `lambda-authorizer/` - Custom authorizer function
-- `lambda-main/` - Main API handler function
-- `build.sh` - Build script for Lambda functions
